@@ -24,35 +24,35 @@ PERSIST_DIR = "chroma_db"
 os.makedirs(PERSIST_DIR, exist_ok=True)
 
 # UI: inject a modern light theme
-def inject_custom_css():
-    st.markdown(
-        """
-    <style>
-      /* Body & fonts */
-      .main { background-color: #f7f8fa; padding: 18px; }
-      section[data-testid="stSidebar"] { background: #ffffff !important; border-right: 1px solid #eef0f3; }
-      h1 { font-size: 34px; color: #1f2937; font-weight:700; }
-      /* Buttons */
-      .stButton>button { background: linear-gradient(90deg,#4b7bec,#5a8ff2); color:#fff; border-radius: 10px; padding: 8px 14px; border: none; font-weight:600; }
-      .stButton>button:hover { transform: translateY(-2px); }
-      /* Cards / panels */
-      .stAlert, .css-1d391kg { border-radius: 12px; }
-      /* Chat bubbles */
-      .stChatMessage { border-radius: 12px !important; padding: 12px !important; background: #fff !important; border: 1px solid #eee !important; box-shadow: 0 1px 3px rgba(16,24,40,0.03); }
-      .stChatMessage[data-testid="chat-message-user"] { background: #eaf2ff !important; border-color: #d6e8ff !important; }
-      /* Code blocks inside expanders */
-      details { background: #fcfdff !important; border-radius: 10px; border: 1px solid #f0f2f6; padding: 10px; }
-      /* Input */
-      .stTextInput>div>input, .stTextArea>div>textarea { border-radius: 10px !important; border: 1px solid #e6e9ee !important; padding: 10px !important; }
-    </style>
-    """,
-        unsafe_allow_html=True,
-    )
+# def inject_custom_css():
+#     st.markdown(
+#         """
+#     <style>
+#       /* Body & fonts */
+#       .main { background-color: #f7f8fa; padding: 18px; }
+#       section[data-testid="stSidebar"] { background: #ffffff !important; border-right: 1px solid #eef0f3; }
+#       h1 { font-size: 34px; color: #1f2937; font-weight:700; }
+#       /* Buttons */
+#       .stButton>button { background: linear-gradient(90deg,#4b7bec,#5a8ff2); color:#fff; border-radius: 10px; padding: 8px 14px; border: none; font-weight:600; }
+#       .stButton>button:hover { transform: translateY(-2px); }
+#       /* Cards / panels */
+#       .stAlert, .css-1d391kg { border-radius: 12px; }
+#       /* Chat bubbles */
+#       .stChatMessage { border-radius: 12px !important; padding: 12px !important; background: #fff !important; border: 1px solid #eee !important; box-shadow: 0 1px 3px rgba(16,24,40,0.03); }
+#       .stChatMessage[data-testid="chat-message-user"] { background: #eaf2ff !important; border-color: #d6e8ff !important; }
+#       /* Code blocks inside expanders */
+#       details { background: #fcfdff !important; border-radius: 10px; border: 1px solid #f0f2f6; padding: 10px; }
+#       /* Input */
+#       .stTextInput>div>input, .stTextArea>div>textarea { border-radius: 10px !important; border: 1px solid #e6e9ee !important; padding: 10px !important; }
+#     </style>
+#     """,
+#         unsafe_allow_html=True,
+#     )
 
 
 # Call early
 st.set_page_config(page_title="Modern Enterprise RAG", layout="wide")
-inject_custom_css()
+# inject_custom_css()
 st.markdown("<h1>📚 Modern Multi-PDF RAG — Portfolio Edition</h1>", unsafe_allow_html=True)
 st.write("Upload PDFs (including PPT-exported PDFs). Works with text PDFs and image PDFs (OCR fallback).")
 
@@ -232,54 +232,38 @@ def get_history_text():
         return ""
 
 def answer_query(question: str):
-    """
-    1) retrieve top-k docs
-    2) build context string
-    3) format prompt with history
-    4) call LLM and return answer + used docs
-    """
     vs = st.session_state.vector_store
     if not vs:
         return "No documents indexed. Please upload and index PDFs.", []
 
+    # Correct modern retriever usage
     retriever = vs.as_retriever(search_kwargs={"k": 5})
-    docs = retriever.get_relevant_documents(question)
+    docs = retriever.invoke(question)
+
+    # Build RAG context
     context = format_retrieved_context(docs)
     history = get_history_text()
 
-    prompt = PROMPT_TMPL.format(context=context, history=history, question=question)
+    prompt = PROMPT_TMPL.format(
+        context=context,
+        history=history,
+        question=question
+    )
+
     llm = get_or_create_llm()
 
-    # Call LLM. Many wrappers support __call__ returning a string.
+    # Correct modern Gemini invocation
     try:
-        # prefer plain call
-        answer = llm(prompt)
-        # Some wrappers return object; try to extract text if needed
-        if hasattr(answer, "content"):
-            # wrapper returns an object with content attribute
-            answer_text = answer.content
-        elif isinstance(answer, list) and len(answer) > 0:
-            answer_text = str(answer[0])
-        else:
-            answer_text = str(answer)
+        response = llm.invoke(prompt)
+        answer_text = response.content
     except Exception as e:
-        # Fallback: try .generate or .create if available
-        try:
-            gen = llm.generate([prompt])
-            # extract
-            if hasattr(gen, "generations"):
-                answer_text = gen.generations[0][0].text
-            else:
-                answer_text = str(gen)
-        except Exception as e2:
-            answer_text = f"LLM call failed: {e}; fallback error: {e2}"
+        answer_text = f"Error while generating LLM response: {e}"
 
-    # Save to memory
+    # Save chat memory
     try:
         st.session_state.memory.chat_memory.add_user_message(question)
         st.session_state.memory.chat_memory.add_ai_message(answer_text)
-    except Exception:
-        # If memory API differs, silently continue
+    except:
         pass
 
     return answer_text, docs
@@ -370,6 +354,33 @@ with col_right:
                                     st.write(excerpt)
 
 # ---------- Footer / tips ----------
+st.header("Settings / Reset")
+if st.button("Clear Chat History"):
+    if "memory" in st.session_state and st.session_state.memory:
+        st.session_state.memory.clear()
+    st.session_state.messages = []
+    st.success("Conversation memory cleared.")
+
+
+if st.button("Reset All Data"):
+    # Clear memory
+    if "memory" in st.session_state and st.session_state.memory:
+        st.session_state.memory.clear()
+    
+    # Clear chat UI
+    st.session_state.messages = []
+
+    # Clear indexed files list
+    st.session_state.indexed_files = set()
+
+    # Clear vector store
+    if "vector_store" in st.session_state and st.session_state.vector_store:
+        vs = st.session_state.vector_store
+        vs.delete_collection()  # delete all vectors
+        st.session_state.vector_store = None
+
+    st.success("All memory and indexed PDFs have been cleared. You can start fresh.")
+
 st.markdown("---")
 st.markdown(
     """
