@@ -1,0 +1,35 @@
+# requirements.txt for Document Q&A System (RAG Application)
+
+# --- Core Libraries & Frameworks ---
+# LangChain for orchestration of the RAG pipeline
+langchain
+
+# Streamlit for the web user interface
+streamlit
+
+# Python-dotenv for secure management of API keys/environment variables
+python-dotenv
+
+# --- LLM and Embedding Providers ---
+# Integration package for OpenAI's LLMs (GPT-3.5/GPT-4) and Embeddings
+langchain-openai
+
+# --- Document Handling ---
+# Community package containing various document loaders (like PyPDFLoader)
+langchain-community
+
+# Dedicated package for advanced text splitting functionality
+langchain-text-splitters
+
+# PDF parsing library used by LangChain's PDF loader
+pypdf
+
+# --- Vector Store ---
+# LangChain integration for the Chroma vector database
+langchain-chroma
+
+# The ChromaDB core library
+chromadb
+langchain-google-genai 
+langchain-huggingface 
+sentence-transformers
